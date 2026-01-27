@@ -7,7 +7,7 @@ import textwrap
 import threading
 
 class NetCat:
-    def __init__(self, args, buffer=None)
+    def __init__(self, args, buffer=None):
         self.args = args
         self.buffer = buffer
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -25,7 +25,7 @@ class NetCat:
             self.socket.send(self.buffer)
 
         try:
-            while true:
+            while True:
                 recv_len = 1
                 response = ''
                 while recv_len:
@@ -81,7 +81,7 @@ class NetCat:
             cmd_buffer = b''
             while True:
                 try:
-                    client.socket.send(b'BHP: #> ')
+                    client_socket.send(b'BHP: #> ')
                     while '\n' not in cmd.buffer.decode():
                         cmd_buffer += client_socket.recv(64)
                     response = execute(cmd_buffer.decode())
