@@ -119,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', type=int, default=5555, help='Porta especificada')
     parser.add_argument('-t', '--target', default='192.168.1.108', help='IP especificado')
     parser.add_argument('-u', '--upload', help='Fazer upload do arquivo')
-    args = parser.parser_args()
+    args = parser.parse_args()
     if args.listen:
         buffer = ''
     else:
