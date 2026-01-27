@@ -7,12 +7,12 @@ import textwrap
 import threading
 
 class NetCat:
-    def __init__(self, args, buffer=None):
+    def __init__(self, args, buffer=None)
         self.args = args
         self.buffer = buffer
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+
     def run(self):
         if self.args.listen:
             self.listen()
@@ -25,36 +25,39 @@ class NetCat:
             self.socket.send(self.buffer)
 
         try:
-            while True:
+            while true:
                 recv_len = 1
                 response = ''
                 while recv_len:
                     data = self.socket.recv(4096)
                     recv_len = len(data)
-                    response += data.decode()
+                    response += data.encode()
+
                     if recv_len < 4096:
                         break
-
+                
                 if response:
                     print(response)
                     buffer = input('> ')
                     buffer += '\n'
                     self.socket.send(buffer.encode())
+        
         except KeyboardInterrupt:
             print('Interrompido pelo usuário')
             self.socket.close()
             sys.exit()
 
     def listen(self):
-        self.socket.bind(('0.0.0.0', self.args.port))
+        self.socket.connect((self.args.target, self.args.port))
         self.socket.listen(5)
+        
         while True:
             client_socket, _ = self.socket.accept()
             client_thread = threading.Thread(
                 target = self.handle, args = (client_socket,)
             )
             client_thread.start()
-        
+    
     def handle(self, client_socket):
         if self.args.execute:
             output = execute(self.args.execute)
@@ -68,6 +71,27 @@ class NetCat:
                     file_buffer += data
                 else:
                     break
+
+            with open(self.args.upload, 'wb') as f:
+                f.write(file_buffer)
+            message = f'Arquivo salvo {self.args.upload}'
+            client_socket.send(message.encode())
+
+        elif self.args.command:
+            cmd_buffer = b''
+            while True:
+                try:
+                    client.socket.send(b'BHP: #> ')
+                    while '\n' not in cmd.buffer.decode():
+                        cmd_buffer += client_socket.recv(64)
+                    response = execute(cmd_buffer.decode())
+                    if response:
+                        client_socket.send(response.encode())
+                    cmd_buffer = b''
+                except Exception as e:
+                    print(f'Servidor encerrado {e}')
+                    self.socket.close()
+                    sys.exit()
                                     
 def execute(cmd):
     cmd = cmd.strip()
@@ -95,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--port', type=int, default=5555, help='Porta especificada')
     parser.add_argument('-t', '--target', default='192.168.1.108', help='IP especificado')
     parser.add_argument('-u', '--upload', help='Fazer upload do arquivo')
-    args = parser.parse_args()
+    args = parser.parser_args()
     if args.listen:
         buffer = ''
     else:
