@@ -47,7 +47,7 @@ class NetCat:
                 
                 if response:
                     print(response)
-                    buffer = input('> ')
+                    buffer = input('>')
                     buffer += '\n'
                     self.socket.send(buffer.encode())
         
@@ -62,9 +62,7 @@ class NetCat:
         
         while True:
             client_socket, _ = self.socket.accept()
-            client_thread = threading.Thread(
-                target = self.handle, args = (client_socket,)
-            )
+            client_thread = threading.Thread(target=self.handle, args=(client_socket,))
             client_thread.start()
     
     def handle(self, client_socket):
@@ -78,6 +76,7 @@ class NetCat:
                 data = client_socket.recv(4096)
                 if data:
                     file_buffer += data
+                    print(len(file_buffer))
                 else:
                     break
 
@@ -122,6 +121,7 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--target', default='192.168.1.108', help='IP especificado')
     parser.add_argument('-u', '--upload', help='Fazer upload do arquivo')
     args = parser.parse_args()
+    
     if args.listen:
         buffer = ''
     else:
