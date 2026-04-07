@@ -5,15 +5,33 @@ import subprocess
 import sys
 import textwrap
 import threading
+import os
 
-                                   
+
+
 def execute(cmd):
-    cmd = cmd.strip()
+        
+    cmd = cmd.strip()   
     if not cmd:
-        return
-    output = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+        return ''
+    
+    if cmd.startwith('cd '):
+        try:
+            path = cmd[3:].strip()
+            os.chdir(path)
+            return ''
+        except Exception as e:
+            return f'Erro ao mudar diretório {str(e)}\n'
+    
+    try:
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        return output.decode()
+    
+    except subprocess.CalledProcessError as e:
+        return e.output.decode()
 
-    return output.decode()
+    except Exception as e:
+        return f"Erro na execução do comando: {str(e)}\n"
 
 class NetCat:
     def __init__(self, args, buffer=None):
@@ -68,7 +86,7 @@ class NetCat:
     def handle(self, client_socket):
         if self.args.execute:
             output = execute(self.args.execute)
-            client_socket.send(output.encode())
+            client_socket.send(output.encode() if response else b'\n')
 
         elif self.args.upload:
             file_buffer = b''
