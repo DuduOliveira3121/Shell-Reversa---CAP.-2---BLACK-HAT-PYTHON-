@@ -32,7 +32,7 @@ def execute(cmd):
 
     except Exception as e:
         return f"Erro na execução do comando: {str(e)}\n"
-
+    
 class NetCat:
     def __init__(self, args, buffer=None):
         self.args = args
@@ -108,16 +108,23 @@ class NetCat:
             while True:
                 try:
                     client_socket.send(b'BHP: #> ')
-                    while '\n' not in cmd_buffer.decode():
-                        cmd_buffer += client_socket.recv(64)
-                    response = execute(cmd_buffer.decode())
+                    while True:
+                        data = client_socket.recv(64)
+                        if not data:
+                            break
+                        cmd_buffer += data
+                        if b'\n' in cmd_buffer:
+                            break
+                    if not data:
+                        break
+                    response = execute(cmd_buffer.decode('utf-8', errors='ignore'))
                     if response:
-                        client_socket.send(response.encode())
+                        client_socket.send(response.encode('utf-8', errors='ignore'))
                     cmd_buffer = b''
                 except Exception as e:
-                    print(f'Servidor encerrado {e}')
-                    self.socket.close()
-                    sys.exit()
+                    print(f'Erro ao processar comando: {e}')
+                    break
+            client_socket.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
