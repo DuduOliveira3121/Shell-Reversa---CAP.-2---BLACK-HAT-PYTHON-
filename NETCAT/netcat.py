@@ -5,20 +5,34 @@ import subprocess
 import sys
 import textwrap
 import threading
+import os
 
-                                   
+
+
 def execute(cmd):
-    cmd = cmd.strip()
+        
+    cmd = cmd.strip()   
     if not cmd:
         return ''
+    
+    if cmd.startwith('cd '):
+        try:
+            path = cmd[3:].strip()
+            os.chdir(path)
+            return ''
+        except Exception as e:
+            return f'Erro ao mudar diretório {str(e)}\n'
+    
     try:
         output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
-        return output.decode('utf-8', errors='ignore')
+        return output.decode()
+    
     except subprocess.CalledProcessError as e:
-        return e.output.decode('utf-8', errors='ignore')
-    except Exception as e:
-        return f'Erro ao executar comando: {str(e)}'
+        return e.output.decode()
 
+    except Exception as e:
+        return f"Erro na execução do comando: {str(e)}\n"
+    
 class NetCat:
     def __init__(self, args, buffer=None):
         self.args = args
