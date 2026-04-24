@@ -10,10 +10,14 @@ import threading
 def execute(cmd):
     cmd = cmd.strip()
     if not cmd:
-        return
-    output = subprocess.check_output(shlex, stderr=subprocess.STDOUT, shell=True)
-
-    return output.decode()
+        return ''
+    try:
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, shell=True)
+        return output.decode('utf-8', errors='ignore')
+    except subprocess.CalledProcessError as e:
+        return e.output.decode('utf-8', errors='ignore')
+    except Exception as e:
+        return f'Erro ao executar comando: {str(e)}'
 
 class NetCat:
     def __init__(self, args, buffer=None):
@@ -68,7 +72,8 @@ class NetCat:
     def handle(self, client_socket):
         if self.args.execute:
             output = execute(self.args.execute)
-            client_socket.send(output.encode())
+            if output:
+                client_socket.send(output.encode('utf-8', errors='ignore'))
 
         elif self.args.upload:
             file_buffer = b''
@@ -90,16 +95,23 @@ class NetCat:
             while True:
                 try:
                     client_socket.send(b'BHP: #> ')
-                    while '\n' not in cmd_buffer.decode():
-                        cmd_buffer += client_socket.recv(64)
-                    response = execute(cmd_buffer.decode())
+                    while True:
+                        data = client_socket.recv(64)
+                        if not data:
+                            break
+                        cmd_buffer += data
+                        if b'\n' in cmd_buffer:
+                            break
+                    if not data:
+                        break
+                    response = execute(cmd_buffer.decode('utf-8', errors='ignore'))
                     if response:
-                        client_socket.send(response.encode())
+                        client_socket.send(response.encode('utf-8', errors='ignore'))
                     cmd_buffer = b''
                 except Exception as e:
-                    print(f'Servidor encerrado {e}')
-                    self.socket.close()
-                    sys.exit()
+                    print(f'Erro ao processar comando: {e}')
+                    break
+            client_socket.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
