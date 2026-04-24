@@ -39,105 +39,141 @@ class NetCat:
 
         try:
             while True:
-                recv_len = 1
-                response = ''
-                while recv_len:
-                    data = self.socket.recv(4096)
-                    recv_len = len(data)
-                    response += data.decode()
-
-                    if recv_len < 4096:
+                # Recebe resposta/prompt do servidor
+                response = b''
+                while True:
+                    data = self.socket.recv(1024)
+                    if not data:
+                        return
+                    response += data
+                    # Se contém prompt, sai do loop de recepção
+                    if b'#> ' in response:
                         break
                 
-                if response:
-                    print(response)
-                    buffer = input('>')
-                    buffer += '\n'
-                    self.socket.send(buffer.encode())
+                # Imprime resposta
+                output = response.decode('utf-8', errors='ignore')
+                print(output, end='', flush=True)
+                
+                # Pede comando do usuário e envia
+                try:
+                    cmd = input()
+                    self.socket.send((cmd + '\n').encode('utf-8'))
+                except EOFError:
+                    break
         
+        except ConnectionResetError:
+            print('[*] Conexão resetada')
         except KeyboardInterrupt:
-            print('Interrompido pelo usuário')
+            print('\n[*] Interrompido')
+        finally:
             self.socket.close()
-            sys.exit()
 
     def listen(self):
-        self.socket.bind((self.args.target, self.args.port))
-        self.socket.listen(5)
-        
-        while True:
-            client_socket, _ = self.socket.accept()
-            client_thread = threading.Thread(target=self.handle, args=(client_socket,))
-            client_thread.start()
+        try:
+            print(f'[*] Iniciando servidor em {self.args.target}:{self.args.port}...')
+            self.socket.bind((self.args.target, self.args.port))
+            print(f'[+] Socket binding OK!')
+            
+            self.socket.listen(5)
+            print(f'[+] Aguardando conexões...')
+            
+            while True:
+                print('[*] Esperando cliente...')
+                client_socket, addr = self.socket.accept()
+                print(f'[+] CLIENTE CONECTADO: {addr}')
+                
+                client_thread = threading.Thread(target=self.handle, args=(client_socket,))
+                client_thread.daemon = True
+                client_thread.start()
+        except Exception as e:
+            print(f'[!] ERRO NO SERVIDOR: {e}')
+        finally:
+            self.socket.close()
     
     def handle(self, client_socket):
-        if self.args.execute:
-            output = execute(self.args.execute)
-            if output:
-                client_socket.send(output.encode('utf-8', errors='ignore'))
+        try:
+            if self.args.execute:
+                output = execute(self.args.execute)
+                if output:
+                    client_socket.send(output.encode('utf-8', errors='ignore'))
 
-        elif self.args.upload:
-            file_buffer = b''
-            while True:
-                data = client_socket.recv(4096)
-                if data:
-                    file_buffer += data
-                    print(len(file_buffer))
-                else:
-                    break
-
-            with open(self.args.upload, 'wb') as f:
-                f.write(file_buffer)
-            message = f'Arquivo salvo {self.args.upload}'
-            client_socket.send(message.encode())
-
-        elif self.args.command:
-            cmd_buffer = b''
-            while True:
-                try:
-                    client_socket.send(b'BHP: #> ')
-                    while True:
-                        data = client_socket.recv(64)
-                        if not data:
-                            break
-                        cmd_buffer += data
-                        if b'\n' in cmd_buffer:
-                            break
-                    if not data:
+            elif self.args.upload:
+                file_buffer = b''
+                while True:
+                    data = client_socket.recv(4096)
+                    if data:
+                        file_buffer += data
+                        print(len(file_buffer))
+                    else:
                         break
-                    response = execute(cmd_buffer.decode('utf-8', errors='ignore'))
-                    if response:
-                        client_socket.send(response.encode('utf-8', errors='ignore'))
-                    cmd_buffer = b''
-                except Exception as e:
-                    print(f'Erro ao processar comando: {e}')
-                    break
+
+                with open(self.args.upload, 'wb') as f:
+                    f.write(file_buffer)
+                message = f'Arquivo salvo {self.args.upload}'
+                client_socket.send(message.encode())
+
+            elif self.args.command:
+                print('[*] Entrando em modo comando')
+                cmd_buffer = b''
+                while True:
+                    try:
+                        # Envia prompt
+                        client_socket.send(b'BHP: #> ')
+                        
+                        # Recebe comando até encontrar \n
+                        while True:
+                            data = client_socket.recv(64)
+                            if not data:
+                                print('[*] Cliente desconectou')
+                                return
+                            cmd_buffer += data
+                            if b'\n' in cmd_buffer:
+                                break
+                        
+                        # Executa comando
+                        cmd_str = cmd_buffer.decode('utf-8', errors='ignore').strip()
+                        print(f'[+] Comando: {cmd_str}')
+                        response = execute(cmd_str)
+                        
+                        # Envia resposta (mesmo se vazia)
+                        if response:
+                            client_socket.send(response.encode('utf-8', errors='ignore'))
+                        
+                        # Limpa buffer de comando
+                        cmd_buffer = b''
+                        
+                    except Exception as e:
+                        print(f'[!] Erro ao processar comando: {e}')
+                        break
+        except Exception as e:
+            print(f'[!] ERRO NO HANDLE: {e}')
+        finally:
             client_socket.close()
+            print('[*] Conexão fechada')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Black Hat Python - Net Tool',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent('''Exemplo:
-            netcat.py -t 192.168.1.108 -p 5555 -l -c # Shell de comando
-            netcat.py -t 192.168.1.108 -p 5555 -l -u=mytest.txt # Fazer upload do arquivo
-            netcat.py -t 192.168.1.108 -p 5555 -l -e=\"cat /etc/passwd\" # Executar comando
+            netcat.py -t 127.0.0.1 -p 5555 -l -c # Shell de comando
+            netcat.py -t 127.0.0.1 -p 5555 -l -u=mytest.txt # Fazer upload do arquivo
+            netcat.py -t 127.0.0.1 -p 5555 -l -e="whoami" # Executar comando
                                
-            echo 'ABC' | ./netcat.py -t 192.168.1.108 -p 135 # Enviar texto para a porta 135 do servidor
-            
-            netcat.py -t 192.168.1.108 -p 5555 # Conectar o servidor
+            netcat.py -t 127.0.0.1 -p 5555 # Conectar o servidor
         '''))
     parser.add_argument('-c', '--command', action='store_true', help='Shell de comando')
     parser.add_argument('-e', '--execute', help='Executar comando especificado')
     parser.add_argument('-l', '--listen', action='store_true', help='Ouvir')
     parser.add_argument('-p', '--port', type=int, default=5555, help='Porta especificada')
-    parser.add_argument('-t', '--target', default='192.168.1.108', help='IP especificado')
+    parser.add_argument('-t', '--target', default='127.0.0.1', help='IP especificado')
     parser.add_argument('-u', '--upload', help='Fazer upload do arquivo')
     args = parser.parse_args()
     
     if args.listen:
         buffer = ''
     else:
-        buffer = sys.stdin.read()
+        buffer = sys.stdin.read() if not sys.stdin.isatty() else ''
 
     nc = NetCat(args, buffer.encode())
     nc.run()
